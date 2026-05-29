@@ -6,6 +6,7 @@ This document records the changes made between versions, starting with version 0
 
 * Avoid emitting compressed blocks when the compressed payload is not smaller
   than the raw block.
+* Fix Dictionary decoding. It should not panic on invalid inputs.
 
 # After 0.8.2
 * Introduce the `rust-version` field

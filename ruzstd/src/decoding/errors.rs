@@ -417,6 +417,7 @@ impl core::fmt::Display for DecodeBufferError {
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum DictionaryDecodeError {
+    NotEnoughBytes,
     BadMagicNum { got: [u8; 4] },
     FSETableError(FSETableError),
     HuffmanTableError(HuffmanTableError),
@@ -436,6 +437,10 @@ impl std::error::Error for DictionaryDecodeError {
 impl core::fmt::Display for DictionaryDecodeError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
+            DictionaryDecodeError::NotEnoughBytes => write!(
+                f,
+                "The raw bytes did not contain a full valid zstd dictionary"
+            ),
             DictionaryDecodeError::BadMagicNum { got } => {
                 write!(
                     f,

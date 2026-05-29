@@ -43,6 +43,10 @@ impl Dictionary {
     /// Parses the dictionary from `raw` and set the tables
     /// it returns the dict_id for checking with the frame's `dict_id``
     pub fn decode_dict(raw: &[u8]) -> Result<Dictionary, DictionaryDecodeError> {
+        if raw.len() < 8 {
+            return Err(DictionaryDecodeError::NotEnoughBytes);
+        }
+
         let mut new_dict = Dictionary {
             id: 0,
             fse: FSEScratch::new(),
@@ -63,26 +67,45 @@ impl Dictionary {
         let raw_tables = &raw[8..];
 
         let huf_size = new_dict.huf.table.build_decoder(raw_tables)?;
+
+        if raw_tables.len() < huf_size as usize {
+            return Err(DictionaryDecodeError::NotEnoughBytes);
+        }
         let raw_tables = &raw_tables[huf_size as usize..];
 
         let of_size = new_dict.fse.offsets.build_decoder(
             raw_tables,
             crate::decoding::sequence_section_decoder::OF_MAX_LOG,
         )?;
+
+        if raw_tables.len() < of_size {
+            return Err(DictionaryDecodeError::NotEnoughBytes);
+        }
         let raw_tables = &raw_tables[of_size..];
 
         let ml_size = new_dict.fse.match_lengths.build_decoder(
             raw_tables,
             crate::decoding::sequence_section_decoder::ML_MAX_LOG,
         )?;
+
+        if raw_tables.len() < ml_size {
+            return Err(DictionaryDecodeError::NotEnoughBytes);
+        }
         let raw_tables = &raw_tables[ml_size..];
 
         let ll_size = new_dict.fse.literal_lengths.build_decoder(
             raw_tables,
             crate::decoding::sequence_section_decoder::LL_MAX_LOG,
         )?;
+
+        if raw_tables.len() < ll_size {
+            return Err(DictionaryDecodeError::NotEnoughBytes);
+        }
         let raw_tables = &raw_tables[ll_size..];
 
+        if raw_tables.len() < 12 {
+            return Err(DictionaryDecodeError::NotEnoughBytes);
+        }
         let offset1 = raw_tables[0..4].try_into().expect("optimized away");
         let offset1 = u32::from_le_bytes(offset1);
 
@@ -101,4 +124,40 @@ impl Dictionary {
 
         Ok(new_dict)
     }
+}
+
+#[test]
+fn truncated_dictionary() {
+    use alloc::vec;
+
+    // First case: Valid dictionary magic number, but missing the 4-byte dictionary ID.
+    let raw = [0x37, 0xA4, 0x30, 0xEC];
+    let _ = Dictionary::decode_dict(&raw);
+
+    // Second case: Valid dictionary magic number, non-zero dictionary ID, table bytes known to parse successfully. But fewer than 12 bytes remain for the 3 offset-history u32 values..
+    let mut raw = vec![0u8; 8];
+    raw[0] = 0x37;
+    raw[1] = 0xA4;
+    raw[2] = 0x30;
+    raw[3] = 0xEC;
+    raw[4] = 0x01;
+    raw[5] = 0x21;
+    raw[6] = 0x23;
+    raw[7] = 0x47;
+
+    let raw_tables = [
+        54, 16, 192, 155, 4, 0, 207, 59, 239, 121, 158, 116, 220, 93, 114, 229, 110, 41, 249, 95,
+        165, 255, 83, 202, 254, 68, 74, 159, 63, 161, 100, 151, 137, 21, 184, 183, 189, 100, 235,
+        209, 251, 174, 91, 75, 91, 185, 19, 39, 75, 146, 98, 177, 249, 14, 4, 35, 0, 0, 0, 40, 40,
+        20, 10, 12, 204, 37, 196, 1, 173, 122, 0, 4, 0, 128, 1, 2, 2, 25, 32, 27, 27, 22, 24, 26,
+        18, 12, 12, 15, 16, 11, 69, 37, 225, 48, 20, 12, 6, 2, 161, 80, 40, 20, 44, 137, 145, 204,
+        46, 0, 0, 0, 0, 0, 116, 253, 16, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    ];
+
+    raw.extend_from_slice(&raw_tables);
+
+    // Fewer than 12 bytes remain for the 3 offset-history u32 values.
+    raw.extend_from_slice(&[3, 0, 0, 0, 10, 0, 0, 0, 0xEF, 0xCD, 0xAB]);
+
+    let _ = Dictionary::decode_dict(&raw);
 }

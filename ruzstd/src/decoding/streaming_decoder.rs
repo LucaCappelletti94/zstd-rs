@@ -65,6 +65,19 @@ impl<READ: Read> StreamingDecoder<READ, FrameDecoder> {
         decoder.init(&mut source)?;
         Ok(StreamingDecoder { decoder, source })
     }
+
+    /// Like [StreamingDecoder::new], but first raises the wrapped decoder's
+    /// window limit to `max_window_size`. See [FrameDecoder::set_max_window_size]
+    /// for the semantics and the security caveat.
+    pub fn new_with_max_window_size(
+        mut source: READ,
+        max_window_size: u64,
+    ) -> Result<StreamingDecoder<READ, FrameDecoder>, FrameDecoderError> {
+        let mut decoder = FrameDecoder::new();
+        decoder.set_max_window_size(max_window_size);
+        decoder.init(&mut source)?;
+        Ok(StreamingDecoder { decoder, source })
+    }
 }
 
 impl<READ: Read, DEC: BorrowMut<FrameDecoder>> StreamingDecoder<READ, DEC> {

@@ -472,7 +472,7 @@ impl From<HuffmanTableError> for DictionaryDecodeError {
 pub enum FrameDecoderError {
     ReadFrameHeaderError(ReadFrameHeaderError),
     FrameHeaderError(FrameHeaderError),
-    WindowSizeTooBig { requested: u64 },
+    WindowSizeTooBig { requested: u64, max: u64 },
     DictionaryDecodeError(DictionaryDecodeError),
     FailedToReadBlockHeader(BlockHeaderReadError),
     FailedToReadBlockBody(DecodeBlockContentError),
@@ -511,12 +511,10 @@ impl core::fmt::Display for FrameDecoderError {
             FrameDecoderError::FrameHeaderError(e) => {
                 write!(f, "{e:?}")
             }
-            FrameDecoderError::WindowSizeTooBig { requested } => {
+            FrameDecoderError::WindowSizeTooBig { requested, max } => {
                 write!(
                     f,
-                    "Specified window_size is too big; Requested: {}, Max: {}",
-                    requested,
-                    crate::common::MAX_WINDOW_SIZE,
+                    "Specified window_size is too big; Requested: {requested}, Max: {max}",
                 )
             }
             FrameDecoderError::DictionaryDecodeError(e) => {

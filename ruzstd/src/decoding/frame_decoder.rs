@@ -97,7 +97,7 @@ pub enum BlockDecodingStrategy {
 }
 
 impl FrameDecoderState {
-    pub fn new(
+    fn new(
         source: impl Read,
         max_window_size: u64,
     ) -> Result<FrameDecoderState, FrameDecoderError> {
@@ -115,11 +115,7 @@ impl FrameDecoderState {
         })
     }
 
-    pub fn reset(
-        &mut self,
-        source: impl Read,
-        max_window_size: u64,
-    ) -> Result<(), FrameDecoderError> {
+    fn reset(&mut self, source: impl Read, max_window_size: u64) -> Result<(), FrameDecoderError> {
         let (frame_header, header_size) = frame::read_frame_header(source)?;
         let window_size = frame_header.window_size()?;
         Self::check_window_size(window_size, max_window_size)?;

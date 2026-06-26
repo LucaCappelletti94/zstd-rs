@@ -573,7 +573,7 @@ fn test_decode_all() {
     assert_eq!(output, original);
 }
 
-/// Plaintext that `decodecorpus_files/window_128mib.zst` decodes to. The fixture was
+/// Plaintext that `test_fixtures/window_128mib.zst` decodes to. The fixture was
 /// produced with `zstd --long=27` (a 128 MiB window descriptor) from this exact
 /// content, so the bytes must match what is generated here.
 #[cfg(test)]
@@ -583,7 +583,7 @@ fn window_128mib_plaintext() -> Vec<u8> {
         .into_bytes()
 }
 
-/// Plaintext that `decodecorpus_files/window_8mib.zst` decodes to. Produced with
+/// Plaintext that `test_fixtures/window_8mib.zst` decodes to. Produced with
 /// `zstd --long=23` (an 8 MiB window descriptor), below the default limit.
 #[cfg(test)]
 fn window_8mib_plaintext() -> Vec<u8> {
@@ -597,7 +597,7 @@ fn test_large_window_decodes_when_limit_raised() {
     use crate::decoding::FrameDecoder;
 
     // 128 MiB window, above the default 100 MiB limit.
-    let compressed = include_bytes!("../../decodecorpus_files/window_128mib.zst");
+    let compressed = include_bytes!("../../test_fixtures/window_128mib.zst");
     let expected = window_128mib_plaintext();
 
     let mut decoder = FrameDecoder::new();
@@ -615,7 +615,7 @@ fn test_large_window_rejected_at_default_limit() {
     use crate::decoding::errors::FrameDecoderError;
     use crate::decoding::{FrameDecoder, DEFAULT_MAX_WINDOW_SIZE};
 
-    let compressed = include_bytes!("../../decodecorpus_files/window_128mib.zst");
+    let compressed = include_bytes!("../../test_fixtures/window_128mib.zst");
 
     let mut decoder = FrameDecoder::new();
     assert_eq!(decoder.max_window_size(), DEFAULT_MAX_WINDOW_SIZE);
@@ -641,7 +641,7 @@ fn test_multi_frame_large_window_decodes_when_raised() {
     // Two large-window frames back to back exercise both the first-frame
     // (FrameDecoderState::new) and later-frame (FrameDecoderState::reset) paths,
     // which historically applied the window check inconsistently.
-    let frame = include_bytes!("../../decodecorpus_files/window_128mib.zst");
+    let frame = include_bytes!("../../test_fixtures/window_128mib.zst");
     let single = window_128mib_plaintext();
 
     let mut input = Vec::new();
@@ -666,8 +666,8 @@ fn test_large_window_rejected_on_first_and_later_frames() {
     use crate::decoding::errors::FrameDecoderError;
     use crate::decoding::FrameDecoder;
 
-    let big = include_bytes!("../../decodecorpus_files/window_128mib.zst"); // 128 MiB window
-    let small = include_bytes!("../../decodecorpus_files/window_8mib.zst"); // 8 MiB window
+    let big = include_bytes!("../../test_fixtures/window_128mib.zst"); // 128 MiB window
+    let small = include_bytes!("../../test_fixtures/window_8mib.zst"); // 8 MiB window
 
     // First frame: a single 128 MiB-window frame is rejected under the default limit.
     let mut decoder = FrameDecoder::new();
@@ -702,7 +702,7 @@ fn test_streaming_decoder_max_window_size() {
     use crate::decoding::StreamingDecoder;
     use std::io::Read;
 
-    let compressed = include_bytes!("../../decodecorpus_files/window_128mib.zst");
+    let compressed = include_bytes!("../../test_fixtures/window_128mib.zst");
     let expected = window_128mib_plaintext();
 
     // The default StreamingDecoder rejects the 128 MiB window on init.

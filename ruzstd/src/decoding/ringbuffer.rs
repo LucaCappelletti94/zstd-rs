@@ -195,17 +195,12 @@ impl RingBuffer {
     /// by the buffer.
     // SAFETY: other code relies on this pointing to initialized halves of the buffer only
     fn data_slice_lengths(&self) -> (usize, usize) {
-        let len_after_head;
-        let len_to_tail;
-
         // TODO can we do this branchless?
-        if self.tail >= self.head {
-            len_after_head = self.tail - self.head;
-            len_to_tail = 0;
+        let (len_after_head, len_to_tail) = if self.tail >= self.head {
+            (self.tail - self.head, 0)
         } else {
-            len_after_head = self.cap - self.head;
-            len_to_tail = self.tail;
-        }
+            (self.cap - self.head, self.tail)
+        };
         (len_after_head, len_to_tail)
     }
 
@@ -235,17 +230,12 @@ impl RingBuffer {
     // at the beginning/end of the buffer. Everything else must be initialized
     /// Returns the size of the two unoccupied sections of memory used by the buffer.
     fn free_slice_lengths(&self) -> (usize, usize) {
-        let len_to_head;
-        let len_after_tail;
-
         // TODO can we do this branchless?
-        if self.tail < self.head {
-            len_after_tail = self.head - self.tail;
-            len_to_head = 0;
+        let (len_after_tail, len_to_head) = if self.tail < self.head {
+            (self.head - self.tail, 0)
         } else {
-            len_after_tail = self.cap - self.tail;
-            len_to_head = self.head;
-        }
+            (self.cap - self.tail, self.head)
+        };
         (len_to_head, len_after_tail)
     }
 

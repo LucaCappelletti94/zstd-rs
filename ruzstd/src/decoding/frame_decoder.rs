@@ -14,9 +14,12 @@ use alloc::collections::BTreeMap;
 use alloc::vec::Vec;
 use core::convert::TryInto;
 
-/// While the maximum window size allowed by the spec is significantly larger,
-/// our implementation limits it to 100mb to protect against malformed frames.
-const MAXIMUM_ALLOWED_WINDOW_SIZE: u64 = 1024 * 1024 * 100;
+/// The default maximum window size, in bytes, that a [FrameDecoder] accepts.
+///
+/// Defaults to 100mb to bound allocation for malformed or hostile frames. The
+/// spec permits far larger windows, so raise the limit with
+/// [FrameDecoder::set_max_window_size] for input you trust.
+pub const DEFAULT_MAX_WINDOW_SIZE: u64 = 1024 * 1024 * 100;
 
 /// Low level Zstandard decoder that can be used to decompress frames with fine control over when and how many bytes are decoded.
 ///
@@ -74,6 +77,7 @@ const MAXIMUM_ALLOWED_WINDOW_SIZE: u64 = 1024 * 1024 * 100;
 pub struct FrameDecoder {
     state: Option<FrameDecoderState>,
     dicts: BTreeMap<u32, Dictionary>,
+    max_window_size: u64,
 }
 
 struct FrameDecoderState {
@@ -93,9 +97,13 @@ pub enum BlockDecodingStrategy {
 }
 
 impl FrameDecoderState {
-    pub fn new(source: impl Read) -> Result<FrameDecoderState, FrameDecoderError> {
+    fn new(
+        source: impl Read,
+        max_window_size: u64,
+    ) -> Result<FrameDecoderState, FrameDecoderError> {
         let (frame, header_size) = frame::read_frame_header(source)?;
         let window_size = frame.window_size()?;
+        Self::check_window_size(window_size, max_window_size)?;
         Ok(FrameDecoderState {
             frame_header: frame,
             frame_finished: false,
@@ -107,15 +115,10 @@ impl FrameDecoderState {
         })
     }
 
-    pub fn reset(&mut self, source: impl Read) -> Result<(), FrameDecoderError> {
+    fn reset(&mut self, source: impl Read, max_window_size: u64) -> Result<(), FrameDecoderError> {
         let (frame_header, header_size) = frame::read_frame_header(source)?;
         let window_size = frame_header.window_size()?;
-
-        if window_size > MAXIMUM_ALLOWED_WINDOW_SIZE {
-            return Err(FrameDecoderError::WindowSizeTooBig {
-                requested: window_size,
-            });
-        }
+        Self::check_window_size(window_size, max_window_size)?;
 
         self.frame_header = frame_header;
         self.frame_finished = false;
@@ -124,6 +127,17 @@ impl FrameDecoderState {
         self.bytes_read_counter = u64::from(header_size);
         self.check_sum = None;
         self.using_dict = None;
+        Ok(())
+    }
+
+    /// Reject a frame whose declared window exceeds the limit, before allocation.
+    fn check_window_size(window_size: u64, max_window_size: u64) -> Result<(), FrameDecoderError> {
+        if window_size > max_window_size {
+            return Err(FrameDecoderError::WindowSizeTooBig {
+                requested: window_size,
+                max: max_window_size,
+            });
+        }
         Ok(())
     }
 }
@@ -142,7 +156,26 @@ impl FrameDecoder {
         FrameDecoder {
             state: None,
             dicts: BTreeMap::new(),
+            max_window_size: DEFAULT_MAX_WINDOW_SIZE,
         }
+    }
+
+    /// Sets the maximum window size, in bytes, this decoder accepts. Frames
+    /// declaring a larger window are rejected with
+    /// [FrameDecoderError::WindowSizeTooBig].
+    ///
+    /// The default ([DEFAULT_MAX_WINDOW_SIZE], 100mb) bounds allocation for
+    /// untrusted input. Raising it reintroduces that large-allocation risk, so
+    /// only do so for sources you trust. Mirrors `ZSTD_d_windowLogMax` in libzstd.
+    ///
+    /// Clamped to the spec's maximum window size.
+    pub fn set_max_window_size(&mut self, max_window_size: u64) {
+        self.max_window_size = max_window_size.min(crate::common::MAX_WINDOW_SIZE);
+    }
+
+    /// Returns the current maximum accepted window size in bytes.
+    pub fn max_window_size(&self) -> u64 {
+        self.max_window_size
     }
 
     /// init() will allocate all needed buffers if it is the first time this decoder is used
@@ -165,11 +198,11 @@ impl FrameDecoder {
         use FrameDecoderError as err;
         let state = match &mut self.state {
             Some(s) => {
-                s.reset(source)?;
+                s.reset(source, self.max_window_size)?;
                 s
             }
             None => {
-                self.state = Some(FrameDecoderState::new(source)?);
+                self.state = Some(FrameDecoderState::new(source, self.max_window_size)?);
                 self.state.as_mut().unwrap()
             }
         };

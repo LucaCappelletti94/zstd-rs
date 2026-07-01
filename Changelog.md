@@ -7,6 +7,9 @@ This document records the changes made between versions, starting with version 0
 * Avoid emitting compressed blocks when the compressed payload is not smaller
   than the raw block.
 * Fix Dictionary decoding. It should not panic on invalid inputs.
+* Make the decode window size limit configurable via `FrameDecoder::set_max_window_size`/`max_window_size`, `StreamingDecoder::new_with_max_window_size`, and the `DEFAULT_MAX_WINDOW_SIZE` constant. The default stays 100mb.
+* Apply the window size limit to the first frame of a stream, not just later frames.
+* **Breaking** `FrameDecoderError::WindowSizeTooBig` gained a `max` field and now reports the effective limit.
 
 # After 0.8.2
 * Introduce the `rust-version` field
